@@ -2,61 +2,47 @@
 /**
  * Utility class for Traffic API connection
  *
- * @version 2.0.1
+ * @version 0.0.1
  */
 class TrafficAPI
 {
-	private static $Version = '2.0.1';
+	private static $Version = '0.0.1';
 	private static $UserAgent = 'SalesLV/Traffic-API';
+	private static $UAString = '';
+
 	private static $VerifySSL = false;
 
-	// Error constants
+    // Error constants
 	// No error
 	const ERROR_NONE = 0;
-	// API key not recognized or not allowed with the current IP address and campaign
-	const ERROR_UNAUTHORIZED = 1;
-	// Response from Premium was invalid, cannot be parsed
-	const ERROR_INVALID_RESPONSE = 2;
-	// Response from Premium was empty, no data contained (something should be there always for valid requests)
-	const ERROR_EMPTY_RESPONSE = 3;
-	// Request from this library was empty for some reason
-	const ERROR_EMPTY_REQUEST = 4;
-	// Command was not recognized
-	const ERROR_UNKNOWN_COMMAND = 5;
-	// No data was found with specified parameters
-	const ERROR_NO_DATA_FOUND = 6;
-	// An error has happened with HTTP request to Premium
-	const ERROR_REQUEST = 7;
+	// Response from Traffic was invalid, cannot be parsed
+	const ERROR_INVALID_RESPONSE = 1;
+	// Response from Traffic was empty, no data contained (something should be there always for valid requests)
+	const ERROR_EMPTY_RESPONSE = 2;
+	// An error has happened with HTTP request to Traffic
+	const ERROR_REQUEST = 3;
 	// No library for HTTP requests available
-	const ERROR_CANNOT_MAKE_HTTP_REQUEST = 8;
-	// Some or all of mandatory parameters were not provided in the API call
-	const ERROR_INSUFFICIENT_PARAMETERS = 9;
-	// A forbidden operation was tried
-	const ERROR_FORBIDDEN = 10;
-	// Invalid API version. Should not happen unless something's seriously wrong on Premium side, this code was altered, or the HTTP request was mangled.
-	const ERROR_INVALID_API_VERSION = 11;
-	// Invalid data format requested. Same as above.
-	const ERROR_INVALID_DATA_FORMAT = 12;
+	const ERROR_CANNOT_MAKE_HTTP_REQUEST = 4;
+	// Attachments upload not supported with the current configuration
+	const ERROR_ATTACHMENTS_NOT_SUPPORTED_WITH_THIS_METHOD = 5;
+	// Traffic responded with error
+	const ERROR_RESPONSE = 6;
 
 	/**
 	 * @var string API endpoint URL
 	 */
-	private static $URL = 'https://traffic.sales.lv/API:2.0:json/';
+	private static $URL = 'https://traffic.sales.lv/API:0.16/';
 
 	/**
-	 * @var string Premium API key.
+	 * @var string Traffic API key.
 	 */
 	private $APIKey = '';
-	/**
-	 * @var string Campaign code to use with API calls.
-	 */
-	private $CampaignCode = '';
 	/**
 	 * @var string Base URL for API calls
 	 */
 	private $APIURL = '';
 	/**
-	 * @var ERROR_* Error code, one of PremiumAPI::ERROR_* constants
+	 * @var ERROR_* Error code, one of TrafficAPI::ERROR_* constants
 	 */
 	private $ErrNo = 0;
 	/**
@@ -64,13 +50,13 @@ class TrafficAPI
 	 */
 	private $Error = '';
 
-	public $Debug = array(
-		'LastHTTPRequest' => array(
+	public $Debug = [
+		'LastHTTPRequest' => [
 			'URL' => '',
-			'Request' => array(),
-			'Response' => array()
-		)
-	);
+			'Request' => [],
+			'Response' => []
+		]
+	];
 
 	// !Public utility methods
 
@@ -80,9 +66,23 @@ class TrafficAPI
 	 */
 	public function __construct($Key)
 	{
+		self::$UAString = self::$UserAgent.'/'.self::$Version;
+		if (extension_loaded('http'))
+		{
+			self::$UAString .= '-http';
+		}
+		elseif (extension_loaded('curl'))
+		{
+			self::$UAString .= '-curl';
+		}
+		elseif (ini_get('allow_url_fopen'))
+		{
+			self::$UAString .= '-stream';
+		}
+
 		$this -> APIKey = $Key;
 
-		$this -> APIURL = self::$URL.'Key:'.$this -> APIKey.'/';
+		$this -> APIURL = self::$URL;
 	}
 
 	public function __get($Name)
@@ -94,12 +94,91 @@ class TrafficAPI
 		return null;
 	}
 
+	// !API calls
+
+    public function Send($Recipients, string $Sender, string $Content, ?int $SendTime = null, ?string $CC = null, int $Validity = 0, bool $Transliteration = false, string $TransliterationFallback = '', bool $ShortenLinks = true, ?array $ShortenLinksOverride = null)
+    {
+		$PostData = array(
+			'APIKey' => $this->APIKey,
+			'Command' => 'Send',
+			'Recipients' => is_array($Recipients) ? json_encode($Recipients) : $Recipients,
+			'Sender' => $Sender,
+			'Content' => $Content
+		);
+
+		if(! empty($SendTime)) {
+			$PostData['SendTime'] = $SendTime;
+		}
+
+		if(! empty($CC)) {
+			$PostData['CC'] = $CC;
+		}
+
+		if(! empty($Validity)) {
+			$PostData['Validity'] = $Validity;
+		}
+
+		if(! empty($Transliteration)) {
+			$PostData['Transliteration'] = $Transliteration;
+		}
+
+		if(! empty($TransliterationFallback)) {
+			$PostData['TransliterationFallback'] = $TransliterationFallback;
+		}
+
+		if(! empty($ShortenLinks)) {
+			$PostData['ShortenLinks'] = $ShortenLinks;
+		}
+
+		if(! empty($ShortenLinksOverride)) {
+			$PostData['ShortenLinksOverride'] = $ShortenLinksOverride;
+		}
+
+		$Data = $this -> HTTPRequest($this -> APIURL, $PostData);
+
+		return $this -> ParseResponse($Data);
+    }
+
+    public function GetSenders()
+    {
+		$Data = $this -> HTTPRequest($this -> APIURL, array(
+			'APIKey' => $this->APIKey,
+			'Command' => 'GetSenders'
+		));
+
+		return $this -> ParseResponse($Data);
+    }
+
+    public function GetDelivery($ID)
+    {
+        $Data = $this -> HTTPRequest($this -> APIURL, array(
+			'APIKey' => $this->APIKey,
+			'Command' => 'GetDelivery',
+			'ID' => is_array($ID) ? json_encode($ID) : $ID
+		));
+
+		return $this -> ParseResponse($Data);
+    }
+
+	public function GetReport($ID)
+    {
+        $Data = $this -> HTTPRequest($this -> APIURL, array(
+			'APIKey' => $this->APIKey,
+			'Command' => 'GetReport',
+			'ID' => is_array($ID) ? json_encode($ID) : $ID
+		));
+
+		return $this -> ParseResponse($Data);
+    }
+
+	// !Public utility methods
+
 	// !Private utility methods
 	private function ParseResponse($Response)
 	{
 		if (!is_array($Response))
 		{
-			// $this -> SetError(self::ERROR_INVALID_RESPONSE, 'Invalid response from Traffic, cannot parse');
+			$this -> SetError(self::ERROR_INVALID_RESPONSE, 'Invalid response from Traffic, cannot parse');
 			return false;
 		}
 
@@ -126,9 +205,9 @@ class TrafficAPI
 
 			$this -> SetError(self::ERROR_INVALID_RESPONSE, $ErrorMessage);
 		}
-		elseif (!empty($Body['ErrNo']))
+		elseif (!empty($Body['Error']))
 		{
-			$this -> SetError($Body['ErrNo'], $Body['Error']);
+			$this -> SetError(self::ERROR_RESPONSE, $Body['Error']);
 		}
 
 		return $Body;
@@ -157,28 +236,32 @@ class TrafficAPI
 	 *	'Content' => string Response body 
 	 * )
 	 */
-	private function HTTPRequest($URL, array $POSTData = null, array $Headers = null)
+	private function HTTPRequest($URL, array $POSTData = null, array $Headers = null, array $Files = null)
 	{
 		$this -> Debug['LastHTTPRequest']['URL'] = $URL;
 		$this -> Debug['LastHTTPRequest']['Method'] = $POSTData ? 'POST' : 'GET';
 		$this -> Debug['LastHTTPRequest']['Request'] = $POSTData;
 		$this -> Debug['LastHTTPRequest']['Response'] = '';
 
-		$Result = array();
+		$Result = [];
 
 		try
 		{
 			if (extension_loaded('http'))
 			{
-				$Result = self::HTTPRequest_http($URL, $POSTData, $Headers);
+				$Result = self::HTTPRequest_http($URL, $POSTData, $Headers, $Files);
 			}
 			elseif (extension_loaded('curl'))
 			{
-				$Result = self::HTTPRequest_curl($URL, $POSTData, $Headers);
+				$Result = self::HTTPRequest_curl($URL, $POSTData, $Headers, $Files);
 			}
 			elseif (ini_get('allow_url_fopen'))
 			{
-				$Result = self::HTTPRequest_fopen($URL, $POSTData, $Headers);
+				if ($Files)
+				{
+					return $this -> SetError(self::ERROR_ATTACHMENTS_NOT_SUPPORTED_WITH_THIS_METHOD, 'Attachment upload not supported for this HTTP connection method (stream context,) please install curl or pecl_http');
+				}
+				$Result = self::HTTPRequest_fopen($URL, $POSTData, $Headers, $Files);
 			}
 			else
 			{
@@ -200,7 +283,7 @@ class TrafficAPI
 	/**
 	 * Utility method for making HTTP requests with the pecl_http extension, see HTTPRequest for more information
 	 */
-	private static function HTTPRequest_http($URL, array $POSTData = null, array $Headers = null)
+	private static function HTTPRequest_http($URL, array $POSTData = null, array $Headers = null, array $Files = null)
 	{
 		$Method = $POSTData ? HttpRequest::METH_POST : HttpRequest::METH_GET;
 
@@ -211,78 +294,99 @@ class TrafficAPI
   		}
   		$Request -> setPostFields($POSTData);
 
+		if ($Files)
+		{
+			foreach ($Files as $File)
+			{
+				$Request -> addPostFile($File['name'], $File['tmp_name'], $File['type']);
+			}
+		}
+
   		$Request -> send();
 
-  		return array(
+  		return [
   			'Headers' => array_merge(
-  				array(
+  				[
 	  				'Response Code' => $Request -> getResponseCode(),
 	  				'Response Status' => $Request -> getResponseStatus()
-	  			),
+	  			],
 	  			$Request -> getResponseHeader()
   			),
   			'Body' => $Request -> getResponseBody()
-  		);
+  		];
 	}
 
 	/**
 	 * Utility method for making HTTP requests with CURL. See TrafficAPI::HTTPRequest for more information
 	 */
-	private static function HTTPRequest_curl($URL, array $POSTData = null, array $Headers = null)
+	private static function HTTPRequest_curl($URL, array $POSTData = null, array $Headers = null, array $Files = null)
 	{
-		// Preparing request content
-		$POSTBody = $POSTData ? self::PrepareBody($POSTData) : '';
+		if ($Files)
+		{
+			if (!$POSTData)
+			{
+				$POSTData = [];
+			}
+
+			$Index = 0;
+			foreach ($Files as $File)
+			{
+				$POSTData['Attachment['.$Index.']'] = curl_file_create($File['tmp_name'], $File['type'], $File['name']);
+				$Index++;
+			}
+		}
 
 		// Preparing request headers
-		$Headers = self::PrepareHeaders($Headers, $URL, strlen($POSTBody));
+		$Headers = ['Expect' => ''];
+		$Headers = self::PrepareHeaders($Headers, $URL);
 
-		// Making the request
-		$cURLRequest = curl_init();
-		curl_setopt_array($cURLRequest, array(
+		$cURLParams = [
 			CURLOPT_URL => $URL, 
 			CURLOPT_HEADER => 1,
 			CURL_HTTP_VERSION_1_0 => true,
-			CURLOPT_POST => $POSTBody ? 1 : 0,
+			CURLOPT_POST => $POSTData ? 1 : 0,
 			CURLOPT_CONNECTTIMEOUT => 60,
 			CURLOPT_TIMEOUT => 120,
 			CURLOPT_MAXREDIRS => 5,
-			CURLOPT_USERAGENT => self::$UserAgent.'/'.self::$Version,
-			CURLOPT_POSTFIELDS => $POSTBody,
+			CURLOPT_FAILONERROR => 1,
+			CURLOPT_USERAGENT => self::$UAString,
+			CURLOPT_SAFE_UPLOAD => true,
+			CURLOPT_POSTFIELDS => $POSTData,
 			CURLOPT_ENCODING => 'gzip',
 			CURLOPT_RETURNTRANSFER => 1,
 			CURLOPT_HTTPHEADER => $Headers,
 			CURLOPT_SSL_VERIFYPEER => self::$VerifySSL
-		));
+		];
+
+		// Making the request
+		$cURLRequest = curl_init();
+		curl_setopt_array($cURLRequest, $cURLParams);
 		$ResponseBody = curl_exec($cURLRequest);
 		curl_close($cURLRequest);
 
-		$ResponseBody = str_replace(array("\r\n", "\n\r", "\r"), array("\n", "\n", "\n"), $ResponseBody);
+		$ResponseBody = str_replace(["\r\n", "\n\r", "\r"], ["\n", "\n", "\n"], $ResponseBody);
 		$ResponseParts = explode("\n\n", $ResponseBody);
 
-		$ResponseHeaders = array();
+		$ResponseHeaders = [];
 		if (count($ResponseParts) > 1)
 		{
 			$ResponseHeaders = self::ParseHeadersFromString($ResponseParts[0]);
 		}
 
 		$ResponseBody = isset($ResponseParts[1]) ? $ResponseParts[1] : $ResponseBody;
-		//if (isset($ResponseHeaders['Content-Encoding']) && $ResponseHeaders['Content-Encoding'] == 'gzip')
-		//{
-			//$ResponseBody = gzinflate($ResponseBody);
-		//}
 
-		return array(
+		return [
 			'Headers' => $ResponseHeaders,
 			'Body' => $ResponseBody
-		);
+		];
 	}
 
 	/**
 	 * Utility method for making the HTTP request with file_get_contents. See TrafficAPI::HTTPRequest for more information
 	 */
-	private static function HTTPRequest_fopen($URL, array $POSTData = null, array $Headers = null)
+	private static function HTTPRequest_fopen($URL, array $POSTData = null, array $Headers = null, array $Files = null)
 	{
-		// Preparing reqiest body
+		// Preparing request body
 		$POSTBody = $POSTData ? self::PrepareBody($POSTData) : '';
 
 		// Preparing headers
@@ -290,24 +394,24 @@ class TrafficAPI
 		$Headers = implode("\r\n", $Headers)."\r\n";
 
 		// Making the request
-		$Context = stream_context_create(array(
-			'http' => array(
+		$Context = stream_context_create([
+			'http' => [
 				'method' => $POSTBody ? 'POST' : 'GET',
 				'header' => $Headers,
 				'content' => $POSTBody,
 				'protocol_version' => 1.0
-			)
-		));
+			]
+		]);
 
 		$Content = file_get_contents($URL, false, $Context);
 
 		$ResponseHeaders = $http_response_header;
 		$ResponseHeaders = self::ParseHeadersFromArray($ResponseHeaders);
 
-		return array(
+		return [
 			'Headers' => $ResponseHeaders,
 			'Body' => $Content
-		);
+		];
 	}
 
 	/**
@@ -315,22 +419,25 @@ class TrafficAPI
 	 *
 	 * @param array Headers to send in addition to the default set (keys are names, values are content)
 	 * @param string URL that will be used for the request (for the "Host" header)
-	 * @param int Content length for the Content-Length header
+	 * @param int Optional content length for the Content-Length header
 	 *
 	 * return array Headers in a numeric array. Each item in the array is a separate header string containing both name and content
 	 */
-	private static function PrepareHeaders(array $Headers = null, $URL, $ContentLength)
+	private static function PrepareHeaders(array $Headers = null, $URL, $ContentLength = null)
 	{
 		$URLInfo = parse_url($URL);
 		$Host = $URLInfo['host'];
 
-		$DefaultHeaders = array(
+		$DefaultHeaders = [
 			'Host' => $Host,
 			'Connection' => 'close',
-			'Content-Type' => 'application/x-www-form-urlencoded',
-			'Content-Length' => $ContentLength,
-			'User-Agent' => self::$UserAgent.'/'.self::$Version
-		);
+			'User-Agent' => self::$UAString
+		];
+
+		if (!is_null($ContentLength))
+		{
+			$DefaultHeaders['Content-Length'] = $ContentLength;
+		}
 
 		if ($Headers)
 		{
@@ -341,11 +448,12 @@ class TrafficAPI
 			$Headers = $DefaultHeaders;
 		}
 
-		$Result = array();
+		$Result = [];
 		foreach ($Headers as $Name => $Content)
 		{
 			$Result[] = $Name.': '.$Content;
 		}
+		
 		return $Result;
 	}
 
@@ -358,11 +466,12 @@ class TrafficAPI
 	 */
 	private static function PrepareBody(array $Data)
 	{
-		$POSTBody = array();
+		$POSTBody = [];
 		foreach ($Data as $Key => $Value)
 		{
 			$POSTBody[] = $Key.'='.urlencode($Value);
 		}
+
 		return implode('&', $POSTBody);
 	}
 
@@ -402,7 +511,7 @@ class TrafficAPI
 	 */
 	private static function ParseHeadersFromArray(array $Headers)
 	{
-		$Result = array();
+		$Result = [];
 
 		$CurrentHeader = 0;
 
