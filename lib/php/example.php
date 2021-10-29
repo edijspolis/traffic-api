@@ -1,9 +1,12 @@
+
 <?php
 	require('traffic-api.php');
 
 	define('API_KEY', '1234567890abcdef');
+	define('RECIPIENTS', '37129222222');
+	define('SENDER', 'Client');
 
-	function error_output(TrafficAPI $APIObject)
+    function error_output(TrafficAPI $APIObject)
 	{
 		if ($APIObject -> ErrNo)
 		{
@@ -22,50 +25,33 @@
 		echo '<pre>'.print_r($APIObject -> Debug, 1).'</pre>';
 	}
 
-	$TrafficAPI = new TrafficAPI(API_KEY, API_CAMPAIGN);
+    $TrafficAPI = new TrafficAPI(API_KEY);
 
-/*
-	// Retrieving campaign information
-	echo '<h2>Campaign information</h2>';
-	$Info = $TrafficAPI -> Info_Get();
+    // Retrieving Senders
+	echo '<h2>Senders</h2>';
+	$Senders = $TrafficAPI -> GetSenders();
 	debug_output($TrafficAPI);
 	error_output($TrafficAPI);
-	results_output($Info);
+	results_output($Senders);
 
-	// Statistics
-	echo '<h2>Campaign statistics</h2>';
-	$Stats = $TrafficAPI -> Statistics_General();
+	// Send message
+	echo '<h2>Send message</h2>';
+	$SendMessage = $TrafficAPI -> Send(RECIPIENTS, SENDER, 'Hello World!');
 	debug_output($TrafficAPI);
 	error_output($TrafficAPI);
-	results_output($Stats);
+	results_output($SendMessage);
 
-	// Messages
-	echo '<h2>Message list retrieval</h2>';
-	$Messages = $TrafficAPI -> Messages_List(array(
-		'Time' => date('c', strtotime('2010-02-07'))
-	), array(
-		'Time' => date('c', strtotime('2010-02-09'))
-	));
+	// Retrieving Delivery
+	echo '<h2>Delivery</h2>';
+	$Delivery = $TrafficAPI -> GetDelivery(array_keys($SendMessage));
 	debug_output($TrafficAPI);
 	error_output($TrafficAPI);
-	results_output($Messages);
+	results_output($Delivery);
 
-	echo '<h2>Single message</h2>';
-	$Message = $TrafficAPI -> Messages_Get(93248);
+	// Retrieving Report
+	echo '<h2>Report</h2>';
+	$Report = $TrafficAPI -> GetReport(array_keys($SendMessage));
 	debug_output($TrafficAPI);
 	error_output($TrafficAPI);
-	results_output($Message);
-
-	echo '<h2>Create a new message</h2>';
-	$Message = $TrafficAPI -> Messages_Create(array(
-		'Phone' => 21234567,
-		'FirstName' => 'George',
-		'LastName' => 'Brown',
-		'ReceiptUnique' => '123/456',
-		'IP' => $_SERVER['REMOTE_ADDR']
-	));
-	debug_output($TrafficAPI);
-	error_output($TrafficAPI);
-	results_output($Message);
-	*/
-?>
+	results_output($Report);
+    
