@@ -40,18 +40,13 @@ class TrafficAPI
 	);
 
 	/**
-	 * @var string API endpoint URL
-	 */
-	private static $URL = 'https://traffic.sales.lv/API:0.16/';
-
-	/**
 	 * @var string Traffic API key.
 	 */
 	private $APIKey = '';
 	/**
-	 * @var string Base URL for API calls
+	 * @var string Traffic API endpoint URL
 	 */
-	private $APIURL = '';
+	private $APIURL = 'https://traffic.sales.lv/API:0.16/';
 	/**
 	 * @var ERROR_* Error code, one of TrafficAPI::ERROR_* constants
 	 */
@@ -92,8 +87,6 @@ class TrafficAPI
 		}
 
 		$this -> APIKey = $Key;
-
-		$this -> APIURL = self::$URL;
 	}
 
 	public function __get($Name)
