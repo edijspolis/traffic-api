@@ -28,6 +28,17 @@ class TrafficAPI
 	// Traffic responded with error
 	const ERROR_RESPONSE = 6;
 
+	// Response error messages
+	private static $ResponseErrors = array(
+		'InvalidRecipients' => 'Incorrect recipient number (in case of a single number) or incorrectly assembled recipient array',
+		'InvalidSender' => 'Sender ID doesn’t exist or isn’t available',
+		'InvalidCountryCode' => 'Incorrect or unsupported country code, if specified',
+		'ContentTooLong' => 'Long SMS message has more than 7 content parts',
+		'QuotaExceeded' => 'Account quota has been exceeded',
+		'InvalidShortenLink' => 'An invalid website address was provided in the ShortenLinksOverride parameter',
+		'InvalidMessageID' => 'erroneous or not specified message ID'
+	);
+
 	/**
 	 * @var string API endpoint URL
 	 */
@@ -99,7 +110,6 @@ class TrafficAPI
     public function Send($Recipients, string $Sender, string $Content, ?int $SendTime = null, ?string $CC = null, int $Validity = 0, bool $Transliteration = false, string $TransliterationFallback = '', bool $ShortenLinks = true, ?array $ShortenLinksOverride = null)
     {
 		$PostData = array(
-			'APIKey' => $this->APIKey,
 			'Command' => 'Send',
 			'Recipients' => is_array($Recipients) ? json_encode($Recipients) : $Recipients,
 			'Sender' => $Sender,
@@ -142,7 +152,6 @@ class TrafficAPI
     public function GetSenders()
     {
 		$Data = $this -> HTTPRequest($this -> APIURL, array(
-			'APIKey' => $this->APIKey,
 			'Command' => 'GetSenders'
 		));
 
@@ -152,7 +161,6 @@ class TrafficAPI
     public function GetDelivery($ID)
     {
         $Data = $this -> HTTPRequest($this -> APIURL, array(
-			'APIKey' => $this->APIKey,
 			'Command' => 'GetDelivery',
 			'ID' => is_array($ID) ? json_encode($ID) : $ID
 		));
@@ -163,7 +171,6 @@ class TrafficAPI
 	public function GetReport($ID)
     {
         $Data = $this -> HTTPRequest($this -> APIURL, array(
-			'APIKey' => $this->APIKey,
 			'Command' => 'GetReport',
 			'ID' => is_array($ID) ? json_encode($ID) : $ID
 		));
@@ -207,7 +214,8 @@ class TrafficAPI
 		}
 		elseif (!empty($Body['Error']))
 		{
-			$this -> SetError(self::ERROR_RESPONSE, $Body['Error']);
+			$ResponseErrorMsg = isset(self::$ResponseErrors[$Body['Error']]) ? self::$ResponseErrors[$Body['Error']] : $Body['Error'];
+			$this -> SetError(self::ERROR_RESPONSE, $ResponseErrorMsg);
 		}
 
 		return $Body;
@@ -238,8 +246,14 @@ class TrafficAPI
 	 */
 	private function HTTPRequest($URL, array $POSTData = null, array $Headers = null, array $Files = null)
 	{
+		$doPost = !is_null($POSTData);
+
+		if($doPost) {
+			$POSTData['APIKey'] = $this->APIKey;
+		}
+
 		$this -> Debug['LastHTTPRequest']['URL'] = $URL;
-		$this -> Debug['LastHTTPRequest']['Method'] = $POSTData ? 'POST' : 'GET';
+		$this -> Debug['LastHTTPRequest']['Method'] = $doPost ? 'POST' : 'GET';
 		$this -> Debug['LastHTTPRequest']['Request'] = $POSTData;
 		$this -> Debug['LastHTTPRequest']['Response'] = '';
 
